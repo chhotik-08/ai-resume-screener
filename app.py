@@ -3,6 +3,15 @@ from PyPDF2 import PdfReader
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import re
+import os
+import subprocess
+import sys
+
+# Check if model is installed; if not, download it
+try:
+    import en_core_web_lg
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_lg"])
 
 # Helper function to extract text
 def extract_text_from_pdf(file):
@@ -83,4 +92,5 @@ if st.button("Analyze & Rank"):
                         st.warning("No specific skill keywords matched.")
 
     else:
+
         st.error("Please upload resumes and provide a job description.")
