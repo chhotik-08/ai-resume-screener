@@ -7,74 +7,99 @@ import nltk
 from nltk.corpus import stopwords
 import re
 
-# Download NLTK data
-nltk.download('stopwords')
+# --- Custom Styling ---
+st.set_page_config(page_title="ResumeAI Pro", page_icon="🎯", layout="wide")
+
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f5f7f9;
+    }
+    .stButton>button {
+        width: 100%;
+        border-radius: 5px;
+        height: 3em;
+        background-color: #007bff;
+        color: white;
+        font-weight: bold;
+        border: none;
+    }
+    .stButton>button:hover {
+        background-color: #0056b3;
+        color: white;
+    }
+    .css-10trblm {
+        color: #1f2937;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- Logic ---
+nltk.download('stopwords', quiet=True)
 stop_words = set(stopwords.words('english'))
 
-def clean_and_extract_skills(text):
+def clean_text(text):
     text = re.sub(r'[^a-zA-Z0-9\s]', '', text).lower()
     words = text.split()
-    filtered_words = [w for w in words if w not in stop_words]
+    return " ".join([w for w in words if w not in stop_words])
+
+# --- Website Layout ---
+st.title("🎯 ResumeAI Pro")
+st.markdown("##### *The intelligent way to find your next top hire.*")
+st.divider()
+
+# Create Tabs for a cleaner look
+tab1, tab2 = st.tabs(["🚀 Screener", "📖 How it Works"])
+
+with tab1:
+    col1, col2 = st.columns([1, 2], gap="large")
     
-    # Expanded Skill Bank
-    skill_bank = ["python", "java", "sql", "aws", "docker", "machine learning", "react", "excel", "tableau", "c++", "javascript"]
-    found_skills = [skill for skill in skill_bank if skill in filtered_words]
-    
-    return " ".join(filtered_words), set(found_skills)
+    with col1:
+        st.subheader("Configuration")
+        jd_input = st.text_area("Target Job Description", placeholder="Paste the JD here...", height=250)
+        uploaded_files = st.file_uploader("Upload Resumes (PDF)", type="pdf", accept_multiple_files=True)
+        analyze_btn = st.button("Start AI Analysis")
 
-# --- UI Setup ---
-st.set_page_config(page_title="Resume Ranker Pro", layout="wide")
-st.title("🏆 AI Resume Ranker & Reporter")
+    with col2:
+        st.subheader("Analysis Dashboard")
+        if analyze_btn and jd_input and uploaded_files:
+            with st.spinner('AI is processing resumes...'):
+                clean_jd = clean_text(jd_input)
+                resumes_data = []
+                
+                for file in uploaded_files:
+                    reader = PdfReader(file)
+                    raw_text = " ".join([page.extract_text() for page in reader.pages])
+                    resumes_data.append({"Name": file.name, "Clean": clean_text(raw_text)})
 
-st.sidebar.header("Input Section")
-jd_input = st.sidebar.text_area("Paste Job Description:", height=300)
-uploaded_files = st.file_uploader("Upload Resumes (PDF)", type="pdf", accept_multiple_files=True)
+                # Scoring
+                texts = [clean_jd] + [r["Clean"] for r in resumes_data]
+                vectorizer = TfidfVectorizer()
+                matrix = vectorizer.fit_transform(texts)
+                scores = cosine_similarity(matrix[0:1], matrix[1:]).flatten()
 
-if st.button("Generate Ranking Report"):
-    if jd_input and uploaded_files:
-        clean_jd, jd_skills = clean_and_extract_skills(jd_input)
-        
-        report_data = []
-        
-        for file in uploaded_files:
-            reader = PdfReader(file)
-            raw_text = " ".join([page.extract_text() for page in reader.pages])
-            
-            clean_res, res_skills = clean_and_extract_skills(raw_text)
-            matched_skills = jd_skills.intersection(res_skills)
-            
-            # Temporary storage for scoring
-            report_data.append({
-                "Candidate Name": file.name,
-                "Clean Text": clean_res,
-                "Matched Skills": ", ".join(matched_skills) if matched_skills else "None"
-            })
+                # Results
+                results_df = pd.DataFrame({
+                    "Candidate Name": [r["Name"] for r in resumes_data],
+                    "Match Score": [round(s * 100, 1) for s in scores]
+                }).sort_values(by="Match Score", ascending=False)
 
-        # Calculate Similarity Scores
-        all_texts = [clean_jd] + [r["Clean Text"] for r in report_data]
-        vectorizer = TfidfVectorizer()
-        matrix = vectorizer.fit_transform(all_texts)
-        scores = cosine_similarity(matrix[0:1], matrix[1:]).flatten()
+                st.balloons()
+                st.success("Analysis Complete!")
+                
+                # Use a stylized table
+                st.dataframe(results_df.style.background_gradient(cmap='Blues'), use_container_width=True)
+                
+                csv = results_df.to_csv(index=False).encode('utf-8')
+                st.download_button("📥 Export Report to CSV", data=csv, file_name='hr_report.csv')
+        else:
+            st.info("Waiting for input... Upload resumes and paste a JD on the left to begin.")
 
-        # Build Final DataFrame
-        for i, r in enumerate(report_data):
-            r["Match Score (%)"] = round(scores[i] * 100, 2)
-        
-        # Create DataFrame and remove hidden text column for display
-        df = pd.DataFrame(report_data)
-        display_df = df.drop(columns=["Clean Text"]).sort_values(by="Match Score (%)", ascending=False)
-
-        # --- Display Results ---
-        st.write("### 📊 Ranking Summary")
-        st.dataframe(display_df, use_container_width=True)
-
-        # --- Download Button ---
-        csv = display_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Download Results as CSV",
-            data=csv,
-            file_name='resume_ranking_report.csv',
-            mime='text/csv',
-        )
-    else:
-        st.error("Please provide both Job Description and Resumes.")
+with tab2:
+    st.write("### How the AI Works")
+    st.write("""
+    1. **Text Extraction:** We use PyPDF2 to pull raw data from your PDF files.
+    2. **Natural Language Processing:** NLTK filters out 'stop words' to focus on core skills.
+    3. **Vectorization:** TF-IDF converts words into mathematical vectors.
+    4. **Cosine Similarity:** We measure the 'angle' between your JD and the Resume to find the perfect match.
+    """)
