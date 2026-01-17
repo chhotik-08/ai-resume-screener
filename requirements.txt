@@ -3,3 +3,4 @@ pypdf2
 scikit-learn
 nltk
 pandas
+matplotlib
