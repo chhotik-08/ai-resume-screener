@@ -2,95 +2,93 @@ import streamlit as st
 from PyPDF2 import PdfReader
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import re
+import spacy
 import os
 import subprocess
-import sys
 
-# Check if model is installed; if not, download it
-try:
-    import en_core_web_lg
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_lg"])
+# --- 1. Robust AI Model Loader ---
+@st.cache_resource
+def load_nlp_model():
+    model_name = "en_core_web_lg"
+    try:
+        # Check if model exists
+        return spacy.load(model_name)
+    except OSError:
+        # If not found, download it automatically
+        st.info(f"Downloading AI Model ({model_name}). Please wait...")
+        subprocess.run(["python", "-m", "spacy", "download", model_name])
+        return spacy.load(model_name)
 
-# Helper function to extract text
+# Initialize spaCy
+nlp = load_nlp_model()
+
+# --- 2. Helper Functions ---
 def extract_text_from_pdf(file):
     pdf = PdfReader(file)
     text = ""
     for page in pdf.pages:
         text += page.extract_text() or ""
-    return text.lower() # Convert to lowercase for easier matching
+    return text.lower()
 
-# Simple Skill Extractor logic
 def extract_keywords(text):
-    # You can expand this list with more skills
-    skill_bank = [
-        "python", "java", "c++", "javascript", "react", "sql", "aws", 
-        "machine learning", "data analysis", "project management", 
-        "communication", "docker", "kubernetes", "excel", "tableau"
-    ]
-    found_skills = [skill for skill in skill_bank if skill in text]
+    # Rule-based skill extraction using spaCy
+    doc = nlp(text)
+    # Common tech labels usually fall under 'ORG' or 'PRODUCT' in standard NER, 
+    # but for this basic version, we will look for tokens in a custom bank.
+    skill_bank = ["python", "java", "sql", "aws", "docker", "machine learning", "excel", "tableau", "react", "javascript"]
+    found_skills = [token.text.lower() for token in doc if token.text.lower() in skill_bank]
     return set(found_skills)
 
-# --- UI Setup ---
-st.set_page_config(page_title="AI Resume Insights", layout="wide")
-st.title("📄 Smart AI Resume Screener")
+# --- 3. UI Setup ---
+st.set_page_config(page_title="AI Resume Screener", layout="wide")
+st.title("📄 Smart AI Resume Screening & Ranking")
 
-# Sidebar
-st.sidebar.header("Configuration")
-job_description = st.sidebar.text_area("Paste Job Description:", height=250).lower()
+st.sidebar.header("Job Details")
+job_description = st.sidebar.text_area("Paste the Job Description here:", height=300).lower()
 
-# File Upload
-uploaded_files = st.file_uploader("Upload Resumes (PDF)", type=["pdf"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("Upload Resumes (PDF format)", type=["pdf"], accept_multiple_files=True)
 
-if st.button("Analyze & Rank"):
+if st.button("Analyze Resumes"):
     if job_description and uploaded_files:
         resumes_data = []
         jd_keywords = extract_keywords(job_description)
 
-        for file in uploaded_files:
-            text = extract_text_from_pdf(file)
-            resume_keywords = extract_keywords(text)
-            
-            # Find intersection (matching keywords)
-            matched = jd_keywords.intersection(resume_keywords)
-            resumes_data.append({
-                "name": file.name,
-                "text": text,
-                "matched_skills": list(matched)
-            })
+        with st.status("Analyzing Resumes..."):
+            for file in uploaded_files:
+                text = extract_text_from_pdf(file)
+                resume_keywords = extract_keywords(text)
+                
+                # Compare keywords
+                matched = jd_keywords.intersection(resume_keywords)
+                resumes_data.append({
+                    "name": file.name,
+                    "text": text,
+                    "matched_skills": list(matched)
+                })
 
-        # TF-IDF Ranking Logic
-        all_texts = [job_description] + [r["text"] for r in resumes_data]
-        vectorizer = TfidfVectorizer()
-        matrix = vectorizer.fit_transform(all_texts)
-        scores = cosine_similarity(matrix[0:1], matrix[1:]).flatten()
+            # AI Vectorization and Similarity Scoring
+            all_texts = [job_description] + [r["text"] for r in resumes_data]
+            cv = TfidfVectorizer()
+            matrix = cv.fit_transform(all_texts)
+            scores = cosine_similarity(matrix[0:1], matrix[1:]).flatten()
 
-        # Combine scores with metadata and sort
-        for i, r in enumerate(resumes_data):
-            r["score"] = scores[i]
+            for i, r in enumerate(resumes_data):
+                r["score"] = scores[i]
 
+        # Sorting results by score
         sorted_resumes = sorted(resumes_data, key=lambda x: x["score"], reverse=True)
 
-        # --- Display Results ---
-        st.write("### 🏆 Candidate Rankings & Skill Match")
+        st.success("✅ Analysis Complete!")
         
+        # Displaying results
         for i, res in enumerate(sorted_resumes):
-            with st.expander(f"Rank {i+1}: {res['name']} ({round(res['score']*100, 2)}%)"):
-                col1, col2 = st.columns(2)
-                
+            score_percent = round(res['score'] * 100, 2)
+            with st.expander(f"Rank {i+1}: {res['name']} — {score_percent}% Match"):
+                col1, col2 = st.columns([1, 2])
                 with col1:
-                    st.write("**Match Percentage**")
-                    st.progress(res['score'])
-                
+                    st.metric("Score", f"{score_percent}%")
                 with col2:
                     st.write("**Matched Keywords:**")
-                    if res['matched_skills']:
-                        # Displaying skills as tags
-                        st.success(", ".join(res['matched_skills']))
-                    else:
-                        st.warning("No specific skill keywords matched.")
-
+                    st.write(", ".join(res['matched_skills']) if res['matched_skills'] else "No common keywords found.")
     else:
-
-        st.error("Please upload resumes and provide a job description.")
+        st.warning("Please provide both a Job Description and at least one Resume.")
