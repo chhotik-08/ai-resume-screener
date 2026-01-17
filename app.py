@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from PyPDF2 import PdfReader
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -6,60 +7,74 @@ import nltk
 from nltk.corpus import stopwords
 import re
 
-# Download necessary NLTK data
+# Download NLTK data
 nltk.download('stopwords')
-nltk.download('punkt')
 stop_words = set(stopwords.words('english'))
 
 def clean_and_extract_skills(text):
-    # 1. Basic Cleaning: Remove special characters and lowercase
     text = re.sub(r'[^a-zA-Z0-9\s]', '', text).lower()
-    
-    # 2. Tokenize and remove stop words
     words = text.split()
     filtered_words = [w for w in words if w not in stop_words]
     
-    # 3. Simple Keyword Matching (Skill Bank)
-    skill_bank = ["python", "java", "sql", "aws", "docker", "machine learning", "react", "excel"]
+    # Expanded Skill Bank
+    skill_bank = ["python", "java", "sql", "aws", "docker", "machine learning", "react", "excel", "tableau", "c++", "javascript"]
     found_skills = [skill for skill in skill_bank if skill in filtered_words]
     
     return " ".join(filtered_words), set(found_skills)
 
 # --- UI Setup ---
-st.title("📄 Lightweight AI Resume Screener")
+st.set_page_config(page_title="Resume Ranker Pro", layout="wide")
+st.title("🏆 AI Resume Ranker & Reporter")
 
-jd_input = st.text_area("Paste Job Description:")
-uploaded_files = st.file_uploader("Upload Resumes", type="pdf", accept_multiple_files=True)
+st.sidebar.header("Input Section")
+jd_input = st.sidebar.text_area("Paste Job Description:", height=300)
+uploaded_files = st.file_uploader("Upload Resumes (PDF)", type="pdf", accept_multiple_files=True)
 
-if st.button("Rank Now"):
+if st.button("Generate Ranking Report"):
     if jd_input and uploaded_files:
         clean_jd, jd_skills = clean_and_extract_skills(jd_input)
         
-        resumes_list = []
+        report_data = []
+        
         for file in uploaded_files:
-            # Extract PDF Text
             reader = PdfReader(file)
             raw_text = " ".join([page.extract_text() for page in reader.pages])
             
-            # Clean and get skills
             clean_res, res_skills = clean_and_extract_skills(raw_text)
             matched_skills = jd_skills.intersection(res_skills)
             
-            resumes_list.append({
-                "name": file.name,
-                "clean_text": clean_res,
-                "matched": matched_skills
+            # Temporary storage for scoring
+            report_data.append({
+                "Candidate Name": file.name,
+                "Clean Text": clean_res,
+                "Matched Skills": ", ".join(matched_skills) if matched_skills else "None"
             })
 
-        # Calculate Scores
-        all_texts = [clean_jd] + [r["clean_text"] for r in resumes_list]
+        # Calculate Similarity Scores
+        all_texts = [clean_jd] + [r["Clean Text"] for r in report_data]
         vectorizer = TfidfVectorizer()
-        tfidf_matrix = vectorizer.fit_transform(all_texts)
-        scores = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:]).flatten()
+        matrix = vectorizer.fit_transform(all_texts)
+        scores = cosine_similarity(matrix[0:1], matrix[1:]).flatten()
 
-        # Display Results
-        for i, res in enumerate(resumes_list):
-            st.write(f"### {i+1}. {res['name']}")
-            st.write(f"**Match Score:** {round(scores[i]*100, 2)}%")
-            st.write(f"**Matching Skills:** {', '.join(res['matched'])}")
-            st.divider()
+        # Build Final DataFrame
+        for i, r in enumerate(report_data):
+            r["Match Score (%)"] = round(scores[i] * 100, 2)
+        
+        # Create DataFrame and remove hidden text column for display
+        df = pd.DataFrame(report_data)
+        display_df = df.drop(columns=["Clean Text"]).sort_values(by="Match Score (%)", ascending=False)
+
+        # --- Display Results ---
+        st.write("### 📊 Ranking Summary")
+        st.dataframe(display_df, use_container_width=True)
+
+        # --- Download Button ---
+        csv = display_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download Results as CSV",
+            data=csv,
+            file_name='resume_ranking_report.csv',
+            mime='text/csv',
+        )
+    else:
+        st.error("Please provide both Job Description and Resumes.")
