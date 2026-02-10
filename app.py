@@ -8,28 +8,51 @@ from nltk.corpus import stopwords
 import re
 
 # --- Custom Styling ---
+# --- Custom Styling ---
 st.set_page_config(page_title="ResumeAI Pro", page_icon="🎯", layout="wide")
 
 st.markdown("""
     <style>
-    .main {
-        background-color: #f5f7f9;
+    /* Main background of the app */
+    .stApp {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     }
+
+    /* Style for the main container/card */
+    [data-testid="stVerticalBlock"] > div:has(div.stTabs) {
+        background-color: white;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    /* Customizing the Title */
+    h1 {
+        color: #1e3a8a;
+        font-family: 'Helvetica Neue', sans-serif;
+        font-weight: 800;
+    }
+
+    /* Styling the Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #ffffff;
+        border-right: 1px solid #e2e8f0;
+    }
+
+    /* Modern Button Styling */
     .stButton>button {
-        width: 100%;
-        border-radius: 5px;
-        height: 3em;
-        background-color: #007bff;
+        background-color: #1e3a8a;
         color: white;
-        font-weight: bold;
+        border-radius: 8px;
         border: none;
+        padding: 10px 20px;
+        transition: all 0.3s ease;
     }
+
     .stButton>button:hover {
-        background-color: #0056b3;
-        color: white;
-    }
-    .css-10trblm {
-        color: #1f2937;
+        background-color: #3b82f6;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -103,3 +126,4 @@ with tab2:
     3. **Vectorization:** TF-IDF converts words into mathematical vectors.
     4. **Cosine Similarity:** We measure the 'angle' between your JD and the Resume to find the perfect match.
     """)
+
