@@ -123,4 +123,5 @@ st.markdown('</div>', unsafe_allow_html=True)
 st.divider()
 f_col1, f_col2, f_col3 = st.columns(3)
 with f_col2:
-    st.markdown("<p style='text-align: center;'>Built by [Your Name] | Powered by Python & NLP</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Built by Chhoti Kumari | Powered by Python & NLP</p>", unsafe_allow_html=True)
+
