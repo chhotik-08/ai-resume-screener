@@ -80,7 +80,7 @@ def clean_text(text):
 
 # --- 3. SIDEBAR BRANDING ---
 with st.sidebar:
-    st.markdown("<h1 style='color: white;'>🌲 EmeraldAI</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color: white;'>AI Resume </h1>", unsafe_allow_html=True)
     st.markdown("<p style='color: #a7f3d0;'>Next-Gen Talent Acquisition</p>", unsafe_allow_html=True)
     st.divider()
     
@@ -149,3 +149,4 @@ else:
             <p style='color: #d1fae5;'>Configure the job description and upload resumes in the sidebar to begin.</p>
         </div>
     """, unsafe_allow_html=True)
+
